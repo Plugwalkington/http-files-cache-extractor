@@ -1,4 +1,3 @@
-import threading
 import requests
 import pathlib
 import re
@@ -72,8 +71,7 @@ def start_getting_files(extract_path: str, out_path: str):
         if not link_name:
             continue
         
-        do_thread = threading.Thread(target=get_and_save_file, args=(link[0], link_name, out_path))
-        do_thread.start()
+        get_and_save_file(link[0], link_name, out_path)
 
 def main():
     extract_path = input("Path to extract files: ")
