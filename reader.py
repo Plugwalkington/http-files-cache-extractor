@@ -61,7 +61,7 @@ def start_getting_files(extract_path: str, out_path: str):
         file = open(filename, "rb")
         header = file.read(92)
 
-        link = re.findall("https:\\/\\/[a-zA-Z0-9]*\\.rbxcdn\\.com\\/[a-z0-9]*", header.decode(errors="ignore"))
+        link = re.findall("https:\\/\\/[a-zA-Z0-9]{1,10}\\.rbxcdn\\.com\\/[a-f0-9]{32}", header.decode(errors="ignore"))
         file.close()
 
         if not link:
