@@ -1,112 +1,88 @@
+import threading
+import requests
 import pathlib
+import re
 import os
-import shutil
 
-# Define the encoding to use for non-ASCII characters
-ENCODING = "utf-8"
+# Had to rewrite this script
 
-# Dictionary mapping file signatures to their corresponding file extensions
+# WHY:
+# So i realized that in the http cache files haves a header
+# it looks something like this: RBXH [Null Bytes] https://[roblox cdn].rbxcdn.com/[hash]
+# the link is the actual file and i didn't realized this until just now
+# so here's a more simpler script since im a dumbass and didn't put any
+# attention to those files and only the contents
+
+# NOTE: This is way slower since it does requests to roblox's CDN and has 
+# to wait for a response
+
 file_headers = {
     b"\x89PNG\r\n\x1a\n": "png",    # PNG file
     b"OggS": "ogg",                 # OGG file
-    b"<roblox!‰ÿ".encode(ENCODING): "rbxl",  # Roblox place file (encoded to bytes)
+    b"<roblox!\x2030\xFF": "rbxl",  # Roblox place file (encoded to bytes)
     b"GIF87a": "gif",               # GIF file (version 87a)
     b"GIF89a": "gif",               # GIF file (version 89a)
     b"ID3": "mp3",                  # MP3 file with ID3 tag
     b"RIFF": "wav",                 # WAV file
     b"PK\x03\x04": "zip",           # ZIP file
-    b"%PDF": "pdf",                 # PDF file
     b"II*\x00": "tif",              # TIFF file (little-endian)
     b"MM\x00*": "tif",              # TIFF file (big-endian)
     b"\x1A\x45\xDF\xA3": "webm",    # WebM file
 }
 
-def do_dir_checks(folder_path: str) -> bool:
-    """
-    Check if the provided folder path is valid.
+def get_and_save_file(link: str, link_name: str, save_to: str):
+    data = requests.get(link)
 
-    Parameters:
-    folder_path (str): The path to the folder.
-
-    Returns:
-    bool: True if the folder path is valid, False otherwise.
-    """
-    if not folder_path:
-        return False
-
-    if not os.path.exists(folder_path):
-        return False
-
-    if not os.path.isdir(folder_path):
+    if data.status_code == 403:
         return False
     
-    return True
+    extension = get_extension(data.text[0:32])
 
-def get_file_extension(file_data: bytes) -> dict:
-    """
-    Determine the file extension based on the file's signature.
+    if not extension:
+        extension = "unknown"
 
-    Parameters:
-    file_data (bytes): The data read from the file.
+    with open(os.path.join(save_to, f"{link_name[0]}.{extension}"), "wb+") as write_to:
+        write_to.write(data.content)
+        write_to.close()
+        print(f"{link}: {link_name[0]}.{extension}")
 
-    Returns:
-    dict: A dictionary containing the file extension and the position of the signature if found, None otherwise.
-    """
+    data.close()
+
+
+def get_extension(str):
     for header, ext in file_headers.items():
-        found_index = file_data.find(header)
+        index = str.find(header.decode(errors="replace"))
 
-        if found_index != -1:
-            return {"extension": ext, "position": found_index}
+        if index != -1:
+            return ext
 
-def move_file(file_path: str, folder_name: str):
-    """
-    Move a file to a specified folder.
+def start_getting_files(extract_path: str, out_path: str):
+    for filename in pathlib.Path(extract_path).iterdir():
+        file = open(filename, "rb")
+        header = file.read(92)
 
-    Parameters:
-    file_path (str): Path to the file to be moved.
-    folder_name (str): Name of the destination folder.
-    """
-    dest_folder = os.path.join(os.path.dirname(file_path), folder_name)
-    os.makedirs(dest_folder, exist_ok=True)
-    shutil.move(file_path, os.path.join(dest_folder, os.path.basename(file_path)))
+        link = re.findall("https:\\/\\/[a-zA-Z0-9]*\\.rbxcdn\\.com\\/[a-z0-9]*", header.decode(errors="ignore"))
+        file.close()
 
-def get_files_from_folder(folder_path: str):
-    """
-    Process all files in the specified folder, identify their file type by signature,
-    and move them to the appropriate folders based on their types.
+        if not link:
+            continue
 
-    Parameters:
-    folder_path (str): The path to the folder containing the files to process.
-    """
-    if not do_dir_checks(folder_path):
-        print("Invalid folder!")
-        exit(-1)
+        link_name = re.findall("[a-f0-9]{32}", link[0]) # hash
 
-    path = pathlib.Path(folder_path)
-    
-    for filename in path.iterdir():
-        if filename.is_file():
-            with open(filename, "rb") as file:
-                file_data = file.read()
-
-                data = get_file_extension(file_data)
-                
-                if not data:
-                    continue
-                
-                file_extension = data['extension']
-                
-                if file_extension in ["png", "tif"]:
-                    move_file(filename, "Photos")
-                elif file_extension in ["ogg", "mp3", "wav"]:
-                    move_file(filename, "Sounds")
-                elif file_extension in ["gif", "webm"]:
-                    move_file(filename, "Video")
-                else:
-                    print(f"Unknown file type: {file_extension}")
+        if not link_name:
+            continue
+        
+        do_thread = threading.Thread(target=get_and_save_file, args=(link[0], link_name, out_path))
+        do_thread.start()
 
 def main():
-    get_files_from_folder("C:\\Users\\build\\AppData\\Local\\Temp\\Roblox\\http")
+    extract_path = input("Path to extract files: ")
+    out_path = input("Output path: ")
+
+    print("This process may take a long time")
+
+    start_getting_files(extract_path, out_path)
+
 
 if __name__ == "__main__":
     main()
