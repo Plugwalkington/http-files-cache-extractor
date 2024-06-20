@@ -19,7 +19,7 @@ import os
 file_headers = {
     b"\x89PNG\r\n\x1a\n": "png",    # PNG file
     b"OggS": "ogg",                 # OGG file
-    b"<roblox!\x2030\xFF": "rbxl",  # Roblox place file (encoded to bytes)
+    b"<roblox": "rbxl",  # Roblox place file (encoded to bytes)
     b"GIF87a": "gif",               # GIF file (version 87a)
     b"GIF89a": "gif",               # GIF file (version 89a)
     b"ID3": "mp3",                  # MP3 file with ID3 tag
